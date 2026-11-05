@@ -93,10 +93,42 @@ function sendPosition(force=false){
 }
 const keys=new Set();addEventListener('keydown',e=>keys.add(e.key.toLowerCase()));addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));let yaw=0,dist=innerWidth<650?20:13,drag=false,lastX=0;renderer.domElement.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX});addEventListener('pointerup',()=>drag=false);addEventListener('pointermove',e=>{if(drag){yaw-=(e.clientX-lastX)*.006;lastX=e.clientX}});renderer.domElement.addEventListener('wheel',e=>dist=Math.max(9,Math.min(24,dist+Math.sign(e.deltaY))),{passive:true});
 let entered=false,score=0,channel=null,client=null,nick='',room='',joined=false;const uid=(crypto.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2)),clean=s=>String(s||'').trim().replace(/[<>]/g,'').slice(0,40);const notice=s=>{const n=$('notice');n.textContent=s;n.style.display='block';clearTimeout(notice.timer);notice.timer=setTimeout(()=>n.style.display='none',3500)};
-const message=(from,text)=>{let p=document.createElement('p');p.textContent=from+': '+text;$('messages').append(p);$('messages').scrollTop=$('messages').scrollHeight;if($('messages').children.length>60)$('messages').firstChild.remove()};
+
+let unreadCount = 0;
+
+function updateUnreadBadge() {
+  const badge = document.getElementById('unreadBadge');
+  if (!badge) return;
+
+  badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+  badge.hidden = unreadCount === 0;
+}
+
+function markChatRead() {
+  unreadCount = 0;
+  updateUnreadBadge();
+}
+
+function notifyNewChat() {
+  const panel = document.getElementById('social');
+  if (!panel || panel.style.display === 'block') return;
+
+  unreadCount++;
+  updateUnreadBadge();
+}
+
+  const message=(from,text)=>{
+  if (from !== nick) notifyNewChat();let p=document.createElement('p');p.textContent=from+': '+text;$('messages').append(p);$('messages').scrollTop=$('messages').scrollHeight;if($('messages').children.length>60)$('messages').firstChild.remove()};
 function link(){let u=new URL(location.href);u.searchParams.set('room',clean($('room').value)||'CHUA-MINHHUY');return u.href}
 async function invite(){if(location.protocol==='file:')return notice('Cần đăng game lên website trước khi mời bạn.');const url=link();try{if(navigator.share)await navigator.share({title:'Đi Chùa Online Minh Huy',url});else{await navigator.clipboard.writeText(url);notice('Đã sao chép link mời bạn!')}}catch{prompt('Sao chép link mời:',url)}}
-$('invite').onclick=invite;$('inviteGate').onclick=invite;$('toggle').onclick=()=>{$('social').style.display=$('social').style.display==='block'?'none':'block'};
+$('invite').onclick=invite;$('inviteGate').onclick=invite;
+$('toggle').onclick=()=>{
+  const panel = $('social');
+  const isOpen = panel.style.display === 'block';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) markChatRead();
+};
+
 // A generation prevents a late CDN import or callback from rejoining after leaving.
 let connectionGeneration=0;
 const cleanText=s=>String(s||'').trim().replace(/[<>]/g,'').slice(0,180);
