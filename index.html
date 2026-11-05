@@ -161,7 +161,6 @@ let audio;function tone(f=420){try{audio??=new (window.AudioContext||window.webk
 const actions={bell:['đã thỉnh chuông bình an 🔔',150,1],wood:['đã gõ mõ thư giãn 🥁',360,1],lotus:['đã thả hoa đăng 🪷',520,2],wish:['chúc mọi người an nhiên, thuận lợi 🙏',610,1],donate:['đã cúng dường 10 xu ảo 💛',680,10],stress:['đã đánh tan Deadline! 💥',220,3]};
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{let [t,f,s]=actions[b.dataset.action];score+=s;$('score').textContent=score+' xu bình an';tone(f);notice(nick+' '+t);if(joined)void broadcast('activity',t)});
 const urlRoom=new URLSearchParams(location.search).get('room');if(urlRoom)$('room').value=clean(urlRoom);
-function animate(){requestAnimationFrame(animate);if(entered){let dx=0,dz=0;if(keys.has('w')||keys.has('arrowup'))dz-=.09;if(keys.has('s')||keys.has('arrowdown'))dz+=.09;if(keys.has('a')||keys.has('arrowleft'))dx-=.09;if(keys.has('d')||keys.has('arrowright'))dx+=.09;hero.position.x=THREE.MathUtils.clamp(hero.position.x+dx,-9,9);hero.position.z=THREE.MathUtils.clamp(hero.position.z+dz,-8,12);hero.rotation.y=dx||dz?Math.atan2(dx,-dz):hero.rotation.y;sendPosition()}let p=hero.position;camera.position.set(p.x+Math.sin(yaw)*dist,p.y+Math.max(7,dist*.7),p.z+Math.cos(yaw)*dist);camera.lookAt(p.x,p.y+1,p.z);renderer.render(scene,camera)}animate();addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 
 function animate() {
   requestAnimationFrame(animate);
