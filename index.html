@@ -162,4 +162,62 @@ const actions={bell:['đã thỉnh chuông bình an 🔔',150,1],wood:['đã gõ
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{let [t,f,s]=actions[b.dataset.action];score+=s;$('score').textContent=score+' xu bình an';tone(f);notice(nick+' '+t);if(joined)void broadcast('activity',t)});
 const urlRoom=new URLSearchParams(location.search).get('room');if(urlRoom)$('room').value=clean(urlRoom);
 function animate(){requestAnimationFrame(animate);if(entered){let dx=0,dz=0;if(keys.has('w')||keys.has('arrowup'))dz-=.09;if(keys.has('s')||keys.has('arrowdown'))dz+=.09;if(keys.has('a')||keys.has('arrowleft'))dx-=.09;if(keys.has('d')||keys.has('arrowright'))dx+=.09;hero.position.x=THREE.MathUtils.clamp(hero.position.x+dx,-9,9);hero.position.z=THREE.MathUtils.clamp(hero.position.z+dz,-8,12);hero.rotation.y=dx||dz?Math.atan2(dx,-dz):hero.rotation.y;sendPosition()}let p=hero.position;camera.position.set(p.x+Math.sin(yaw)*dist,p.y+Math.max(7,dist*.7),p.z+Math.cos(yaw)*dist);camera.lookAt(p.x,p.y+1,p.z);renderer.render(scene,camera)}animate();addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (entered) {
+    let dx = 0, dz = 0;
+
+    if (keys.has('w') || keys.has('arrowup')) dz -= 0.09;
+    if (keys.has('s') || keys.has('arrowdown')) dz += 0.09;
+    if (keys.has('a') || keys.has('arrowleft')) dx -= 0.09;
+    if (keys.has('d') || keys.has('arrowright')) dx += 0.09;
+
+    // Joystick trên điện thoại
+    dx += mobileControls.x * 0.09;
+    dz += mobileControls.y * 0.09;
+
+    // Giới hạn tốc độ khi di chuyển chéo
+    const speed = Math.hypot(dx, dz);
+    if (speed > 0.09) {
+      dx = dx / speed * 0.09;
+      dz = dz / speed * 0.09;
+    }
+
+    hero.position.x = THREE.MathUtils.clamp(
+      hero.position.x + dx, -9, 9
+    );
+
+    hero.position.z = THREE.MathUtils.clamp(
+      hero.position.z + dz, -8, 12
+    );
+
+    if (dx || dz) {
+      hero.rotation.y = Math.atan2(dx, -dz);
+    }
+
+    sendPosition();
+  }
+
+  const p = hero.position;
+
+  camera.position.set(
+    p.x + Math.sin(yaw) * dist,
+    p.y + Math.max(7, dist * 0.7),
+    p.z + Math.cos(yaw) * dist
+  );
+
+  camera.lookAt(p.x, p.y + 1, p.z);
+  renderer.render(scene, camera);
+}
+
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
 </script></body></html>
