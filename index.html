@@ -55,12 +55,12 @@ function syncVisitors(){
  $('online').textContent='Online: '+names.length+' · '+names.slice(0,12).join(', ');
 }
 function clearVisitors(){for(const g of visitors.values())scene.remove(g);visitors.clear()}
-let lastTrack=0,lastX=NaN,lastZ=NaN,lastRot=NaN;
+let lastTrack=0,lastSentX=NaN,lastZ=NaN,lastRot=NaN;
 function sendPosition(force=false){
  if(!joined||!channel||!entered)return;
  const t=performance.now(),x=hero.position.x,z=hero.position.z,rot=hero.rotation.y;
- if(!force&&(t-lastTrack<180||x===lastX&&z===lastZ&&rot===lastRot))return;
- lastTrack=t;lastX=x;lastZ=z;lastRot=rot;
+ if(!force&&(t-lastTrack<180||x===lastSentX&&z===lastZ&&rot===lastRot))return;
+ lastTrack=t;lastSentX=x;lastZ=z;lastRot=rot;
  channel.track({nick,x,z,rot}).catch(()=>{});
 }
 const keys=new Set();addEventListener('keydown',e=>keys.add(e.key.toLowerCase()));addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));let yaw=0,dist=13,drag=false,lastX=0;renderer.domElement.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX});addEventListener('pointerup',()=>drag=false);addEventListener('pointermove',e=>{if(drag){yaw-=(e.clientX-lastX)*.006;lastX=e.clientX}});renderer.domElement.addEventListener('wheel',e=>dist=Math.max(9,Math.min(24,dist+Math.sign(e.deltaY))),{passive:true});
