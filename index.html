@@ -56,17 +56,21 @@ function syncVisitors(){
    v.rotation.y=Number.isFinite(+p.rot)?+p.rot:0;
   }
  }
- for(const [id,g] of visitors)if(!seen.has(id)){scene.remove(g);visitors.delete(id)}
+ for(const [id,g] of visitors)if(!seen.has(id)){removeVisitor(g);visitors.delete(id)}
  $('online').textContent='Online: '+names.length+' · '+names.slice(0,12).join(', ');
 }
-function clearVisitors(){for(const g of visitors.values())scene.remove(g);visitors.clear()}
+function removeVisitor(g){
+ scene.remove(g);
+ g.traverse(o=>{o.geometry?.dispose();if(o.material){o.material.map?.dispose();o.material.dispose()}});
+}
+function clearVisitors(){for(const g of visitors.values())removeVisitor(g);visitors.clear()}
 let lastTrack=0,lastSentX=NaN,lastZ=NaN,lastRot=NaN;
 function sendPosition(force=false){
  if(!joined||!channel||!entered)return;
  const t=performance.now(),x=hero.position.x,z=hero.position.z,rot=hero.rotation.y;
  if(!force&&(t-lastTrack<180||x===lastSentX&&z===lastZ&&rot===lastRot))return;
  lastTrack=t;lastSentX=x;lastZ=z;lastRot=rot;
- channel.track({nick,x,z,rot}).catch(()=>{});
+ channel.track({nick,x,z,rot}).then(result=>{if(result!=='ok'&&joined)$('status').textContent='Không gửi được vị trí: '+result}).catch(()=>{});
 }
 const keys=new Set();addEventListener('keydown',e=>keys.add(e.key.toLowerCase()));addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));let yaw=0,dist=innerWidth<650?20:13,drag=false,lastX=0;renderer.domElement.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX});addEventListener('pointerup',()=>drag=false);addEventListener('pointermove',e=>{if(drag){yaw-=(e.clientX-lastX)*.006;lastX=e.clientX}});renderer.domElement.addEventListener('wheel',e=>dist=Math.max(9,Math.min(24,dist+Math.sign(e.deltaY))),{passive:true});
 let entered=false,score=0,channel=null,client=null,nick='',room='',joined=false;const uid=(crypto.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2)),clean=s=>String(s||'').trim().replace(/[<>]/g,'').slice(0,40);const notice=s=>{const n=$('notice');n.textContent=s;n.style.display='block';clearTimeout(notice.timer);notice.timer=setTimeout(()=>n.style.display='none',3500)};
@@ -74,13 +78,88 @@ const message=(from,text)=>{let p=document.createElement('p');p.textContent=from
 function link(){let u=new URL(location.href);u.searchParams.set('room',clean($('room').value)||'CHUA-MINHHUY');return u.href}
 async function invite(){if(location.protocol==='file:')return notice('Cần đăng game lên website trước khi mời bạn.');const url=link();try{if(navigator.share)await navigator.share({title:'Đi Chùa Online Minh Huy',url});else{await navigator.clipboard.writeText(url);notice('Đã sao chép link mời bạn!')}}catch{prompt('Sao chép link mời:',url)}}
 $('invite').onclick=invite;$('inviteGate').onclick=invite;$('toggle').onclick=()=>{$('social').style.display=$('social').style.display==='block'?'none':'block'};
-async function connect(){const c=window.TEMPLE_CONFIG||{};if(!c.supabaseUrl||!c.supabaseAnonKey){$('status').textContent='Chế độ chơi đơn. Cấu hình Supabase để chơi cùng bạn bè.';return}try{let createClient;try{({createClient}=await import('https://esm.sh/@supabase/supabase-js@2'))}catch{({createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'))}client=createClient(c.supabaseUrl,c.supabaseAnonKey,{auth:{persistSession:false,autoRefreshToken:false}});channel=client.channel('temple:'+room,{config:{presence:{key:uid},broadcast:{self:false}}});channel.on('presence',{event:'sync'},syncVisitors);channel.on('broadcast',{event:'chat'},({payload:p})=>{if(p?.nick&&p?.text)message(clean(p.nick),clean(p.text).slice(0,180))});channel.on('broadcast',{event:'activity'},({payload:p})=>{if(p?.nick)message('🪷 Chùa',clean(p.nick)+' '+clean(p.text))});channel.subscribe(async (state,err)=>{if(state==='SUBSCRIBED'){joined=true;await channel.track({nick,x:hero.position.x,z:hero.position.z,rot:hero.rotation.y}).then(()=>{syncVisitors();$('status').textContent='Đã kết nối phòng '+room+' · Đang đồng bộ người chơi'}).catch(e=>{$('status').textContent='Kết nối được nhưng không đăng ký online: '+e.message});}else if(state==='CHANNEL_ERROR'||state==='TIMED_OUT'||state==='CLOSED'){joined=false;const detail=err?.message||err?.code||'Không có chi tiết';$('status').textContent='Lỗi Realtime: '+state+' · '+detail+' · Hãy kiểm tra Supabase Realtime Settings / Policies';}});}catch(e){$('status').textContent='Lỗi: '+e.message}}
+// A generation prevents a late CDN import or callback from rejoining after leaving.
+let connectionGeneration=0;
+const cleanText=s=>String(s||'').trim().replace(/[<>]/g,'').slice(0,180);
+async function disconnect(){
+ connectionGeneration++;
+ joined=false;
+ const oldClient=client,oldChannel=channel;
+ client=null;channel=null;
+ clearVisitors();
+ $('online').textContent='Online: 1 (bạn)';
+ if(oldClient){try{if(oldChannel)await oldClient.removeChannel(oldChannel)}finally{oldClient.realtime.disconnect()}}
+}
+function realtimeFailure(state,err){
+ const detail=err?.message||err?.code||'Không có chi tiết';
+ const transport=/transport|websocket/i.test(detail);
+ $('status').textContent='Lỗi Realtime: '+state+' · '+detail+' · '+(transport
+  ?'Không mở được WebSocket tới Supabase. Kiểm tra mạng/proxy, DNS và trạng thái project. Bạn vẫn có thể chơi đơn.'
+  :'Kiểm tra trạng thái project, khóa public và quyền public channel trong Supabase. Bạn vẫn có thể chơi đơn.');
+}
+async function connect(){
+ await disconnect();
+ if(!entered)return;
+ const generation=connectionGeneration,c=window.TEMPLE_CONFIG||{};
+ const active=()=>entered&&generation===connectionGeneration;
+ if(!c.supabaseUrl||!c.supabaseAnonKey){$('status').textContent='Chế độ chơi đơn. Cấu hình Supabase để chơi cùng bạn bè.';return}
+ try{
+  const url=new URL(c.supabaseUrl);
+  if(url.protocol!=='https:'||url.pathname!=='/'||url.search||url.hash)throw new Error('Supabase URL phải là địa chỉ HTTPS gốc của project');
+  if(/^sb_secret_/.test(c.supabaseAnonKey))throw new Error('Chỉ dùng publishable/anon key công khai');
+  let createClient;
+  // Pin both CDN routes to the same version to keep Realtime behavior reproducible.
+  try{({createClient}=await import('https://esm.sh/@supabase/supabase-js@2.119.0'))}
+  catch{({createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/+esm'))}
+  if(!active())return;
+  client=createClient(url.origin,c.supabaseAnonKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+  const current=client.channel('temple:'+room,{config:{private:false,presence:{key:uid},broadcast:{self:false,ack:true}}});
+  channel=current;
+  current.on('presence',{event:'sync'},()=>{if(active())syncVisitors()});
+  current.on('broadcast',{event:'chat'},({payload:p})=>{if(active()&&p?.nick&&p?.text)message(clean(p.nick),cleanText(p.text))});
+  current.on('broadcast',{event:'activity'},({payload:p})=>{if(active()&&p?.nick&&p?.text)message('🪷 Chùa',clean(p.nick)+' '+cleanText(p.text))});
+  current.subscribe(async(state,err)=>{
+   if(!active())return;
+   if(state==='SUBSCRIBED'){
+    try{
+     const result=await current.track({nick,x:hero.position.x,z:hero.position.z,rot:hero.rotation.y});
+     if(!active())return;
+     if(result!=='ok')throw new Error('Presence: '+result);
+     joined=true;
+     lastSentX=NaN;lastZ=NaN;lastRot=NaN;
+     syncVisitors();
+     $('status').textContent='Đã kết nối phòng '+room+' · Đang đồng bộ người chơi';
+    }catch(e){if(active()){joined=false;realtimeFailure('PRESENCE_ERROR',e)}}
+   }else if(state==='CHANNEL_ERROR'||state==='TIMED_OUT'||state==='CLOSED'){
+    joined=false;clearVisitors();$('online').textContent='Chưa xác nhận người chơi online';realtimeFailure(state,err);
+   }
+  });
+ }catch(e){if(active())realtimeFailure('CONNECT_ERROR',e)}
+}
+async function broadcast(event,text){
+ if(!joined||!channel){notice('Cần kết nối Supabase để gửi tới bạn bè');return false}
+ const current=channel,generation=connectionGeneration;
+ try{
+  const result=await current.send({type:'broadcast',event,payload:{nick,text}});
+  if(generation!==connectionGeneration||current!==channel)return false;
+  if(result!=='ok')throw new Error(result);
+  return true;
+ }catch{if(generation===connectionGeneration)notice('Chưa gửi được tới phòng. Kiểm tra kết nối và thử lại.');return false}
+}
 $('enter').onclick=()=>{nick=clean($('nick').value);room=clean($('room').value).toUpperCase();if(!nick||!room)return notice('Vui lòng nhập nickname và mã phòng');$('gate').style.display='none';$('bar').style.display='flex';$('actions').style.display='flex';$('hint').style.display='block';$('who').textContent=nick;$('roomLabel').textContent=room;entered=true;$('status').textContent='Đang kết nối Supabase…';connect();notice('Chào mừng '+nick+' đến Chùa Minh Huy!')};
-$('leave').onclick=async()=>{entered=false;$('gate').style.display='grid';$('bar').style.display='none';$('actions').style.display='none';$('hint').style.display='none';$('social').style.display='none';if(channel)await client.removeChannel(channel);channel=null;joined=false;clearVisitors();$('online').textContent='Online: 1 (bạn)'};
-$('send').onclick=()=>{let text=$('message').value.trim().slice(0,180);if(!text)return;if(!joined)return notice('Cần kết nối Supabase để chat với bạn bè');message(nick,text);channel.send({type:'broadcast',event:'chat',payload:{nick,text}});$('message').value=''};$('message').onkeydown=e=>{if(e.key==='Enter')$('send').click()};
+$('leave').onclick=async()=>{entered=false;keys.clear();$('gate').style.display='grid';$('bar').style.display='none';$('actions').style.display='none';$('hint').style.display='none';$('social').style.display='none';await disconnect()};
+let sendingChat=false;
+$('send').onclick=async()=>{
+ const text=cleanText($('message').value);if(!text||sendingChat)return;
+ const sender=nick,generation=connectionGeneration;
+ sendingChat=true;$('send').disabled=true;
+ try{if(await broadcast('chat',text)){if(generation!==connectionGeneration)return;message(sender,text);if($('message').value.trim()===text)$('message').value=''}}
+ finally{sendingChat=false;$('send').disabled=false}
+};
+$('message').onkeydown=e=>{if(e.key==='Enter')$('send').click()};
 let audio;function tone(f=420){try{audio??=new (window.AudioContext||window.webkitAudioContext)();const o=audio.createOscillator(),g=audio.createGain();o.frequency.value=f;o.type='sine';g.gain.setValueAtTime(.16,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.8);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+.8)}catch{}}
 const actions={bell:['đã thỉnh chuông bình an 🔔',150,1],wood:['đã gõ mõ thư giãn 🥁',360,1],lotus:['đã thả hoa đăng 🪷',520,2],wish:['chúc mọi người an nhiên, thuận lợi 🙏',610,1],donate:['đã cúng dường 10 xu ảo 💛',680,10],stress:['đã đánh tan Deadline! 💥',220,3]};
-document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{let [t,f,s]=actions[b.dataset.action];score+=s;$('score').textContent=score+' xu bình an';tone(f);notice(nick+' '+t);if(joined)channel.send({type:'broadcast',event:'activity',payload:{nick,text:t}})});
+document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{let [t,f,s]=actions[b.dataset.action];score+=s;$('score').textContent=score+' xu bình an';tone(f);notice(nick+' '+t);if(joined)void broadcast('activity',t)});
 const urlRoom=new URLSearchParams(location.search).get('room');if(urlRoom)$('room').value=clean(urlRoom);
 function animate(){requestAnimationFrame(animate);if(entered){let dx=0,dz=0;if(keys.has('w')||keys.has('arrowup'))dz-=.09;if(keys.has('s')||keys.has('arrowdown'))dz+=.09;if(keys.has('a')||keys.has('arrowleft'))dx-=.09;if(keys.has('d')||keys.has('arrowright'))dx+=.09;hero.position.x=THREE.MathUtils.clamp(hero.position.x+dx,-9,9);hero.position.z=THREE.MathUtils.clamp(hero.position.z+dz,-8,12);hero.rotation.y=dx||dz?Math.atan2(dx,-dz):hero.rotation.y;sendPosition()}let p=hero.position;camera.position.set(p.x+Math.sin(yaw)*dist,p.y+Math.max(7,dist*.7),p.z+Math.cos(yaw)*dist);camera.lookAt(p.x,p.y+1,p.z);renderer.render(scene,camera)}animate();addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 </script></body></html>
