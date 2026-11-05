@@ -16,7 +16,15 @@
   font-weight: 800;
 }
 
-</style></head><body><div id="hud"><div id="gate"><div class="panel"><h1>🏯 ĐI CHÙA ONLINE<br>CỦA MINH HUY</h1><p>Vào chùa là thấy bình an • Xõa stress 3D</p><label>Nickname / Pháp danh vui</label><input id="nick" maxlength="30" placeholder="Đặt pháp danh của bạn"><label>Mã phòng</label><input id="room" maxlength="40" value="CHUA-MINHHUY"><p><button id="enter">🚪 Vào chùa 3D</button> <button id="inviteGate">🔗 Mời bạn</button></p><small>Không cần tài khoản. Chơi chung qua Supabase Realtime.</small><p id="startupError" hidden style="color:#ffb7a3;font-size:13px"></p></div></div>
+</style></head><body><div id="hud"><div id="gate"><div class="panel"><h1>🏯 ĐI CHÙA ONLINE<br>CỦA MINH HUY</h1><p>Vào chùa là thấy bình an • Xõa stress 3D</p>
+<label>Email đăng nhập</label>
+<input id="loginEmail" type="email" placeholder="Nhập email đã đăng ký" autocomplete="username">
+
+<label>Mật khẩu</label>
+<input id="loginPassword" type="password" placeholder="Nhập mật khẩu" autocomplete="current-password">
+
+<label>Nickname / Pháp danh vui</label>
+<input id="nick" maxlength="30" placeholder="Đặt pháp danh của bạn"><label>Mã phòng</label><input id="room" maxlength="40" value="CHUA-MINHHUY"><p><button id="enter">🚪 Vào chùa 3D</button> <button id="inviteGate">🔗 Mời bạn</button></p><small>Không cần tài khoản. Chơi chung qua Supabase Realtime.</small><p id="startupError" hidden style="color:#ffb7a3;font-size:13px"></p></div></div>
 <div id="bar"><div>🏯 <b id="who"></b> · <span id="roomLabel"></span> · <span id="score">0 xu bình an</span></div><div><button id="invite">🔗 Mời bạn</button> <button id="toggle">
   👥 Chat
   <span id="unreadBadge" hidden>0</span>
@@ -141,13 +149,27 @@ async function disconnect(){
  $('online').textContent='Online: 1 (bạn)';
  if(oldClient){try{if(oldChannel)await oldClient.removeChannel(oldChannel)}finally{oldClient.realtime.disconnect()}}
 }
-function realtimeFailure(state,err){
- const detail=err?.message||err?.code||'Không có chi tiết';
- const transport=/transport|websocket/i.test(detail);
- $('status').textContent='Lỗi Realtime: '+state+' · '+detail+' · '+(transport
-  ?'Không mở được WebSocket tới Supabase. Kiểm tra mạng/proxy, DNS và trạng thái project. Bạn vẫn có thể chơi đơn.'
-  :'Kiểm tra trạng thái project, khóa public và quyền public channel trong Supabase. Bạn vẫn có thể chơi đơn.');
+
+function realtimeFailure(state, err) {
+  const detail = err?.message || err?.code || 'Không có chi tiết';
+
+  $('status').textContent =
+    'Lỗi kết nối phòng chùa: ' + state + ' · ' + detail;
+
+  joined = false;
+  entered = false;
+
+  $('gate').style.display = 'grid';
+  $('bar').style.display = 'none';
+  $('actions').style.display = 'none';
+  $('hint').style.display = 'none';
+  $('social').style.display = 'none';
+
+  notice('Không thể kết nối phòng chùa. Vui lòng thử lại.');
+  
+void disconnect().catch(console.error);
 }
+
 async function connect(){
  await disconnect();
  if(!entered)return;
@@ -163,8 +185,63 @@ async function connect(){
   try{({createClient}=await import('https://esm.sh/@supabase/supabase-js@2.119.0'))}
   catch{({createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/+esm'))}
   if(!active())return;
-  client=createClient(url.origin,c.supabaseAnonKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-  const current=client.channel('temple:'+room,{config:{private:false,presence:{key:uid},broadcast:{self:false,ack:true}}});
+ client=createClient(url.origin,c.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+   
+const email = $('loginEmail').value.trim();
+const password = $('loginPassword').value;
+
+if (!email || !password) {
+  $('status').textContent = 'Vui lòng nhập Email và mật khẩu.';
+  notice('Bạn cần đăng nhập để vào phòng chùa.');
+  entered = false;
+  return;
+}
+
+const { data: loginData, error: loginError } =
+  await client.auth.signInWithPassword({
+    email,
+    password
+  });
+
+if (loginError || !loginData.user) {
+  $('status').textContent = 'Đăng nhập không thành công.';
+  notice('Email hoặc mật khẩu không chính xác.');
+  entered = false;
+  return;
+}
+  
+if (!active()) return;
+ 
+const { data: membership, error: memberError } = await client
+  .from('temple_room_members')
+  .select('room')
+  .eq('room', room)
+  .eq('user_id', loginData.user.id)
+  .maybeSingle();
+
+
+if (memberError || !membership) {
+  $('status').textContent = 'Bạn chưa được cấp quyền vào phòng này.';
+  notice('Tài khoản chưa có quyền tham gia phòng ' + room);
+  entered = false;
+  await client.auth.signOut();
+  return;
+}
+
+if (!active()) return;
+
+await client.realtime.setAuth(loginData.session.access_token);
+if (!active()) return;
+
+$('gate').style.display = 'none';
+$('bar').style.display = 'flex';
+$('actions').style.display = 'flex';
+$('hint').style.display = 'block';
+$('who').textContent = nick;
+$('roomLabel').textContent = room;
+
+
+  const current=client.channel('temple:'+room,{config:{private:true,presence:{key:uid},broadcast:{self:false,ack:true}}});
   channel=current;
   current.on('presence',{event:'sync'},()=>{if(active())syncVisitors()});
   current.on('broadcast',{event:'chat'},({payload:p})=>{if(active()&&p?.nick&&p?.text)message(clean(p.nick),cleanText(p.text))});
@@ -197,7 +274,21 @@ async function broadcast(event,text){
   return true;
  }catch{if(generation===connectionGeneration)notice('Chưa gửi được tới phòng. Kiểm tra kết nối và thử lại.');return false}
 }
-$('enter').onclick=()=>{nick=clean($('nick').value);room=clean($('room').value).toUpperCase();if(!nick||!room)return notice('Vui lòng nhập nickname và mã phòng');$('gate').style.display='none';$('bar').style.display='flex';$('actions').style.display='flex';$('hint').style.display='block';$('who').textContent=nick;$('roomLabel').textContent=room;entered=true;$('status').textContent='Đang kết nối Supabase…';connect();notice('Chào mừng '+nick+' đến Chùa Minh Huy!')};
+
+$('enter').onclick = () => {
+  nick = clean($('nick').value);
+  room = clean($('room').value).toUpperCase();
+
+  if (!nick || !room) {
+    notice('Vui lòng nhập nickname và mã phòng');
+    return;
+  }
+
+  entered = true;
+  $('status').textContent = 'Đang xác thực tài khoản...';
+  connect();
+};
+
 $('leave').onclick=async()=>{entered=false;keys.clear();$('gate').style.display='grid';$('bar').style.display='none';$('actions').style.display='none';$('hint').style.display='none';$('social').style.display='none';await disconnect()};
 let sendingChat=false;
 $('send').onclick=async()=>{
