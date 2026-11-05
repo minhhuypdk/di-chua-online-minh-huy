@@ -1,5 +1,21 @@
 <!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Đi Chùa Online Của Minh Huy 3D</title><style>
 *{box-sizing:border-box}body{margin:0;background:#101b2b;color:#fff;font:15px system-ui,Arial}canvas{display:block;position:fixed;inset:0}#hud{position:fixed;inset:0;pointer-events:none}button,input{font:inherit;border-radius:10px;padding:11px;border:1px solid #d8bd78}button{background:#f5c968;color:#292018;cursor:pointer;font-weight:700}button:hover{filter:brightness(1.12)}input{width:100%;background:#fff;color:#111}#gate{position:absolute;inset:0;display:grid;place-items:center;background:#071325aa;pointer-events:auto}#gate .panel{width:min(420px,94vw);background:#152b39f0;border:1px solid #e2c27b;border-radius:22px;padding:25px;box-shadow:0 20px 60px #0009}h1{font-size:25px;text-align:center;color:#ffdd8b}label{display:block;margin:12px 0 5px}#bar{position:absolute;top:15px;left:15px;right:15px;display:none;align-items:center;justify-content:space-between;gap:8px;pointer-events:auto}#bar button{padding:8px}#actions{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:none;gap:8px;flex-wrap:wrap;justify-content:center;pointer-events:auto;width:95%}#social{position:absolute;right:12px;top:75px;width:min(350px,94vw);max-height:75vh;overflow:auto;background:#112836f2;border:1px solid #c5aa71;border-radius:15px;padding:14px;display:none;pointer-events:auto}#messages{height:155px;overflow:auto;background:#091923;padding:10px;border-radius:8px;overflow-wrap:anywhere}#messages p{margin:6px 0}#chatrow{display:flex;gap:5px;margin-top:8px}#chatrow input{min-width:0}#hint{position:absolute;bottom:92px;left:0;right:0;text-align:center;text-shadow:0 2px 5px #000;display:none}#notice{position:absolute;top:85px;left:50%;transform:translateX(-50%);text-align:center;background:#152b39dd;border-radius:15px;padding:12px;display:none}small{color:#b6c8d0}#gate p{text-align:center;color:#d7dfe1}@media(max-width:650px){#bar{top:8px;left:8px;right:8px;align-items:flex-start;flex-direction:column;gap:5px}#bar>div:first-child{font-size:12px;max-width:100%;overflow-wrap:anywhere;text-shadow:0 1px 3px #000}#bar>div:last-child{display:flex;gap:5px;flex-wrap:wrap}#bar button{font-size:13px;padding:7px 9px}#social{top:115px;right:8px;width:calc(100vw - 16px);max-height:55vh}#actions{bottom:12px;max-height:120px;overflow:auto;gap:5px}#actions button{font-size:12px;padding:8px}#hint{bottom:145px;font-size:11px;padding:0 8px}#notice{top:130px;max-width:90vw}#gate .panel{max-height:94dvh;overflow:auto}}
+
+#unreadBadge:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  margin-left: 5px;
+  border-radius: 20px;
+  background: #e53935;
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 </style></head><body><div id="hud"><div id="gate"><div class="panel"><h1>🏯 ĐI CHÙA ONLINE<br>CỦA MINH HUY</h1><p>Vào chùa là thấy bình an • Xõa stress 3D</p><label>Nickname / Pháp danh vui</label><input id="nick" maxlength="30" placeholder="Đặt pháp danh của bạn"><label>Mã phòng</label><input id="room" maxlength="40" value="CHUA-MINHHUY"><p><button id="enter">🚪 Vào chùa 3D</button> <button id="inviteGate">🔗 Mời bạn</button></p><small>Không cần tài khoản. Chơi chung qua Supabase Realtime.</small><p id="startupError" hidden style="color:#ffb7a3;font-size:13px"></p></div></div>
 <div id="bar"><div>🏯 <b id="who"></b> · <span id="roomLabel"></span> · <span id="score">0 xu bình an</span></div><div><button id="invite">🔗 Mời bạn</button> <button id="toggle">
   👥 Chat
