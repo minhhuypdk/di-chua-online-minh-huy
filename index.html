@@ -162,7 +162,9 @@ const actions={bell:['đã thỉnh chuông bình an 🔔',150,1],wood:['đã gõ
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{let [t,f,s]=actions[b.dataset.action];score+=s;$('score').textContent=score+' xu bình an';tone(f);notice(nick+' '+t);if(joined)void broadcast('activity',t)});
 const urlRoom=new URLSearchParams(location.search).get('room');if(urlRoom)$('room').value=clean(urlRoom);
 
-function animate() {
+const mobileControls = { x: 0, y: 0 };
+ 
+ function animate() {
   requestAnimationFrame(animate);
 
   if (entered) {
